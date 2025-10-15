@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penjadwal Tugas & Pengingat Deadline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Animasi untuk notifikasi dan task item */
+        .task-item-enter {
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+        }
+        .task-item-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* Style untuk task yang sudah selesai */
+        .completed {
+            text-decoration: line-through;
+            color: #9ca3af; /* gray-400 */
+        }
+        /* Style untuk notifikasi 24 jam */
+        .deadline-warning {
+            border-left-width: 4px;
+            border-left-color: #f59e0b; /* amber-500 */
+            background-color: #fef3c7; /* amber-100 */
+        }
+        .deadline-urgent {
+             border-left-width: 4px;
+            border-left-color: #ef4444; /* red-500 */
+            background-color: #fee2e2; /* red-100 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-3xl">
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Penjadwal Tugas</h1>
+            <p class="text-gray-600 mt-2">Catat semua tugasmu dan jangan sampai ada yang terlewat!</p>
+        </header>
+
+        <!-- Form untuk menambah tugas baru -->
+        <div class="bg-white p-6 rounded-xl shadow-md mb-8">
+            <form id="task-form" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div class="col-span-1 md:col-span-2">
+                    <label for="task-name" class="block text-sm font-medium text-gray-700 mb-1">Nama Tugas</label>
+                    <input type="text" id="task-name" placeholder="Contoh: Mengerjakan proyek akhir" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label for="deadline-date" class="block text-sm font-medium text-gray-700 mb-1">Tanggal Deadline</label>
+                    <input type="date" id="deadline-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label for="deadline-time" class="block text-sm font-medium text-gray-700 mb-1">Jam Deadline</label>
+                    <input type="time" id="deadline-time" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                    <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-300">
+                        Tambah Tugas
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Daftar Tugas -->
+        <div id="task-list-container">
+            <h2 class="text-2xl font-bold mb-4">Daftar Tugas Aktif</h2>
+            <div id="task-list" class="space-y-4">
+                <!-- Tugas akan ditampilkan di sini oleh JavaScript -->
+            </div>
+             <p id="empty-message" class="text-center text-gray-500 mt-8 hidden">Yeay! Tidak ada tugas aktif saat ini.</p>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const taskForm = document.getElementById('task-form');
+            const taskNameInput = document.getElementById('task-name');
+            const deadlineDateInput = document.getElementById('deadline-date');
+            const deadlineTimeInput = document.getElementById('deadline-time');
+            const taskList = document.getElementById('task-list');
+            const emptyMessage = document.getElementById('empty-message');
+            
+            // Atur tanggal minimum ke hari ini
+            const today = new Date().toISOString().split('T')[0];
+            deadlineDateInput.setAttribute('min', today);
+
+            let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+
+            const saveTasks = () => {
+                localStorage.setItem('tasks', JSON.stringify(tasks));
+            };
+
+            const renderTasks = () => {
+                taskList.innerHTML = '';
+                if (tasks.length === 0) {
+                    emptyMessage.classList.remove('hidden');
+                } else {
+                    emptyMessage.classList.add('hidden');
+                }
+                
+                // Sortir tugas berdasarkan deadline terdekat
+                tasks.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+
+                tasks.forEach(task => {
+                    const taskItem = document.createElement('div');
+                    taskItem.dataset.id = task.id;
+                    
+                    const now = new Date();
+                    const deadline = new Date(task.deadline);
+                    const diff = deadline - now;
+                    const is24HourWarning = diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed;
+                    const isUrgent = diff <= 0 && !task.completed;
+
+                    let taskClasses = 'task-item bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300';
+                    if (is24HourWarning) taskClasses += ' deadline-warning';
+                    if (isUrgent) taskClasses += ' deadline-urgent';
+                    
+                    taskItem.className = taskClasses;
+
+                    const deadlineFormatted = deadline.toLocaleString('id-ID', {
+                        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+
+                    taskItem.innerHTML = `
+                        <div class="flex-grow">
+                            <p class="task-name font-semibold text-lg ${task.completed ? 'completed' : ''}">${task.name}</p>
+                            <p class="text-sm text-gray-500">Deadline: ${deadlineFormatted}</p>
+                            <p class="time-remaining text-sm font-medium mt-1"></p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button class="toggle-complete-btn px-3 py-1 text-sm rounded-full ${task.completed ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-700'} hover:opacity-80 transition-opacity">
+                                ${task.completed ? 'Batal' : 'Selesai'}
+                            </button>
+                            <button class="delete-btn px-3 py-1 text-sm bg-red-100 text-red-700 rounded-full hover:opacity-80 transition-opacity">Hapus</button>
+                        </div>
+                    `;
+                    
+                    taskList.appendChild(taskItem);
+                    // Efek animasi saat item baru ditambahkan
+                    setTimeout(() => {
+                         taskItem.classList.add('task-item-enter');
+                         requestAnimationFrame(() => {
+                             taskItem.classList.add('task-item-enter-active');
+                         });
+                    }, 10);
+                });
+                updateAllRemainingTimes();
+            };
+            
+            const updateRemainingTime = (taskItem) => {
+                const taskId = taskItem.dataset.id;
+                const task = tasks.find(t => t.id == taskId);
+                if (!task) return;
+
+                const timeRemainingEl = taskItem.querySelector('.time-remaining');
+                if (!timeRemainingEl) return;
+
+                const now = new Date();
+                const deadline = new Date(task.deadline);
+                const diff = deadline - now;
+
+                if (task.completed) {
+                    timeRemainingEl.textContent = 'Tugas sudah selesai!';
+                    timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-green-600';
+                    return;
+                }
+
+                if (diff <= 0) {
+                    timeRemainingEl.textContent = 'Waktu habis!';
+                    timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-red-600';
+                    return;
+                }
+                
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+                timeRemainingEl.textContent = `Sisa waktu: ${days} hari, ${hours} jam, ${minutes} menit, ${seconds} detik`;
+                
+                // Atur warna berdasarkan sisa waktu
+                if(diff < 24 * 60 * 60 * 1000) {
+                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-amber-600';
+                } else {
+                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-blue-600';
+                }
+
+            };
+            
+            const updateAllRemainingTimes = () => {
+                const taskItems = document.querySelectorAll('.task-item');
+                taskItems.forEach(item => updateRemainingTime(item));
+            };
+
+            taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+
+                const taskName = taskNameInput.value.trim();
+                const deadlineDate = deadlineDateInput.value;
+                const deadlineTime = deadlineTimeInput.value;
+
+                if (taskName && deadlineDate && deadlineTime) {
+                    const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
+
+                    if (deadline < new Date()) {
+                        alert("Waktu deadline tidak boleh di masa lalu.");
+                        return;
+                    }
+
+                    tasks.push({
+                        id: Date.now(),
+                        name: taskName,
+                        deadline: deadline.toISOString(),
+                        completed: false
+                    });
+
+                    saveTasks();
+                    renderTasks();
+
+                    taskForm.reset();
+                    deadlineDateInput.setAttribute('min', today); // Set min date lagi setelah reset
+                }
+            });
+
+            taskList.addEventListener('click', (e) => {
+                const taskItem = e.target.closest('.task-item');
+                if (!taskItem) return;
+                const taskId = taskItem.dataset.id;
+                
+                if (e.target.classList.contains('delete-btn')) {
+                    tasks = tasks.filter(task => task.id != taskId);
+                }
+                
+                if (e.target.classList.contains('toggle-complete-btn')) {
+                    const task = tasks.find(task => task.id == taskId);
+                    if (task) {
+                        task.completed = !task.completed;
+                    }
+                }
+                
+                saveTasks();
+                renderTasks();
+            });
+
+            // Jalankan update setiap detik
+            setInterval(() => {
+                updateAllRemainingTimes();
+                // Re-render untuk update status notifikasi jika ada yg melewati batas 24 jam
+                const taskItems = document.querySelectorAll('.task-item');
+                taskItems.forEach(item => {
+                    const taskId = item.dataset.id;
+                    const task = tasks.find(t => t.id == taskId);
+                    if (!task) return;
+                    
+                    const now = new Date();
+                    const deadline = new Date(task.deadline);
+                    const diff = deadline - now;
+                    const is24HourWarning = diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed;
+                    const isUrgent = diff <= 0 && !task.completed;
+
+                    item.classList.toggle('deadline-warning', is24HourWarning);
+                    item.classList.toggle('deadline-urgent', isUrgent);
+                });
+            }, 1000);
+
+            // Render pertama kali saat halaman dimuat
+            renderTasks();
+        });
+    </script>
+</body>
+</html>
