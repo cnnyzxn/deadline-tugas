@@ -94,6 +94,15 @@
             const today = new Date().toISOString().split('T')[0];
             deadlineDateInput.setAttribute('min', today);
 
+            // Minta izin untuk notifikasi saat halaman dimuat
+            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification('Terima kasih!', { body: 'Anda akan menerima pengingat deadline.' });
+                    }
+                });
+            }
+
             let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 
             const saveTasks = () => {
@@ -108,7 +117,6 @@
                     emptyMessage.classList.add('hidden');
                 }
                 
-                // Sortir tugas berdasarkan deadline terdekat
                 tasks.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
                 tasks.forEach(task => {
@@ -146,7 +154,6 @@
                     `;
                     
                     taskList.appendChild(taskItem);
-                    // Efek animasi saat item baru ditambahkan
                     setTimeout(() => {
                          taskItem.classList.add('task-item-enter');
                          requestAnimationFrame(() => {
@@ -188,23 +195,19 @@
 
                 timeRemainingEl.textContent = `Sisa waktu: ${days} hari, ${hours} jam, ${minutes} menit, ${seconds} detik`;
                 
-                // Atur warna berdasarkan sisa waktu
                 if(diff < 24 * 60 * 60 * 1000) {
                      timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-amber-600';
                 } else {
                      timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-blue-600';
                 }
-
             };
             
             const updateAllRemainingTimes = () => {
-                const taskItems = document.querySelectorAll('.task-item');
-                taskItems.forEach(item => updateRemainingTime(item));
+                document.querySelectorAll('.task-item').forEach(item => updateRemainingTime(item));
             };
 
             taskForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-
                 const taskName = taskNameInput.value.trim();
                 const deadlineDate = deadlineDateInput.value;
                 const deadlineTime = deadlineTimeInput.value;
@@ -221,14 +224,14 @@
                         id: Date.now(),
                         name: taskName,
                         deadline: deadline.toISOString(),
-                        completed: false
+                        completed: false,
+                        notified24h: false // Properti baru untuk melacak notifikasi
                     });
 
                     saveTasks();
                     renderTasks();
-
                     taskForm.reset();
-                    deadlineDateInput.setAttribute('min', today); // Set min date lagi setelah reset
+                    deadlineDateInput.setAttribute('min', today);
                 }
             });
 
@@ -252,30 +255,48 @@
                 renderTasks();
             });
 
+            // Fungsi untuk memeriksa dan mengirim notifikasi
+            const checkAndNotify = () => {
+                const now = new Date();
+                tasks.forEach(task => {
+                    if (task.completed || task.notified24h) return;
+
+                    const deadline = new Date(task.deadline);
+                    const diff = deadline - now;
+                    
+                    if (diff < 24 * 60 * 60 * 1000 && diff > 0) {
+                        if ('Notification' in window && Notification.permission === 'granted') {
+                            new Notification('Tugas Segera Deadline!', {
+                                body: `Tugas "${task.name}" akan berakhir dalam kurang dari 24 jam.`,
+                                icon: 'https://placehold.co/48x48/f59e0b/ffffff?text=!'
+                            });
+                        }
+                        task.notified24h = true; // Tandai bahwa notifikasi sudah dikirim
+                        saveTasks();
+                    }
+                });
+            };
+
             // Jalankan update setiap detik
             setInterval(() => {
                 updateAllRemainingTimes();
-                // Re-render untuk update status notifikasi jika ada yg melewati batas 24 jam
-                const taskItems = document.querySelectorAll('.task-item');
-                taskItems.forEach(item => {
-                    const taskId = item.dataset.id;
-                    const task = tasks.find(t => t.id == taskId);
+                 // Perbarui style visual secara real-time
+                document.querySelectorAll('.task-item').forEach(item => {
+                    const task = tasks.find(t => t.id == item.dataset.id);
                     if (!task) return;
                     
-                    const now = new Date();
-                    const deadline = new Date(task.deadline);
-                    const diff = deadline - now;
-                    const is24HourWarning = diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed;
-                    const isUrgent = diff <= 0 && !task.completed;
-
-                    item.classList.toggle('deadline-warning', is24HourWarning);
-                    item.classList.toggle('deadline-urgent', isUrgent);
+                    const diff = new Date(task.deadline) - new Date();
+                    item.classList.toggle('deadline-warning', diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed);
+                    item.classList.toggle('deadline-urgent', diff <= 0 && !task.completed);
                 });
             }, 1000);
 
-            // Render pertama kali saat halaman dimuat
+            // Periksa notifikasi setiap beberapa detik untuk efisiensi
+            setInterval(checkAndNotify, 5000);
+
             renderTasks();
         });
     </script>
 </body>
 </html>
+
