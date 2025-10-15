@@ -10,7 +10,6 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        /* Animasi untuk notifikasi dan task item */
         .task-item-enter {
             opacity: 0;
             transform: translateY(-20px);
@@ -20,12 +19,10 @@
             opacity: 1;
             transform: translateY(0);
         }
-        /* Style untuk task yang sudah selesai */
         .completed {
             text-decoration: line-through;
             color: #9ca3af; /* gray-400 */
         }
-        /* Style untuk notifikasi 24 jam */
         .deadline-warning {
             border-left-width: 4px;
             border-left-color: #f59e0b; /* amber-500 */
@@ -36,6 +33,11 @@
             border-left-color: #ef4444; /* red-500 */
             background-color: #fee2e2; /* red-100 */
         }
+        #notification-status button {
+            cursor: pointer;
+            text-decoration: underline;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -45,6 +47,10 @@
         <header class="text-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Penjadwal Tugas</h1>
             <p class="text-gray-600 mt-2">Catat semua tugasmu dan jangan sampai ada yang terlewat!</p>
+            <!-- Area Status Notifikasi Baru -->
+            <div id="notification-status" class="mt-4 p-3 rounded-lg text-center text-sm font-medium transition-all duration-300">
+                <!-- Status akan diisi oleh JavaScript -->
+            </div>
         </header>
 
         <!-- Form untuk menambah tugas baru -->
@@ -89,19 +95,49 @@
             const deadlineTimeInput = document.getElementById('deadline-time');
             const taskList = document.getElementById('task-list');
             const emptyMessage = document.getElementById('empty-message');
+            const notificationStatus = document.getElementById('notification-status');
             
-            // Atur tanggal minimum ke hari ini
             const today = new Date().toISOString().split('T')[0];
             deadlineDateInput.setAttribute('min', today);
 
-            // Minta izin untuk notifikasi saat halaman dimuat
-            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        new Notification('Terima kasih!', { body: 'Anda akan menerima pengingat deadline.' });
-                    }
-                });
-            }
+            const updateNotificationStatus = () => {
+                if (!window.isSecureContext) {
+                    notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-red-100 text-red-800';
+                    notificationStatus.innerHTML = '<strong>Koneksi Tidak Aman:</strong> Notifikasi hanya berfungsi pada koneksi HTTPS.';
+                    return;
+                }
+
+                if (!('Notification' in window)) {
+                    notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-yellow-100 text-yellow-800';
+                    notificationStatus.innerHTML = 'Browser ini tidak mendukung notifikasi desktop.';
+                    return;
+                }
+
+                switch (Notification.permission) {
+                    case 'granted':
+                        notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-green-100 text-green-800';
+                        notificationStatus.innerHTML = '✔️ Notifikasi sudah aktif.';
+                        break;
+                    case 'denied':
+                        notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-red-100 text-red-800';
+                        notificationStatus.innerHTML = '❌ Notifikasi diblokir. Harap izinkan melalui pengaturan browser.';
+                        break;
+                    default:
+                        notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-blue-100 text-blue-800';
+                        notificationStatus.innerHTML = 'Ingin pengingat? <button id="enable-notifications">Aktifkan Notifikasi</button>';
+                        document.getElementById('enable-notifications').onclick = () => {
+                            Notification.requestPermission().then(permission => {
+                                if (permission === 'granted') {
+                                    new Notification('Terima kasih!', { body: 'Anda akan menerima pengingat deadline.' });
+                                }
+                                updateNotificationStatus();
+                            });
+                        };
+                        break;
+                }
+            };
+
+            updateNotificationStatus();
 
             let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 
@@ -111,11 +147,7 @@
 
             const renderTasks = () => {
                 taskList.innerHTML = '';
-                if (tasks.length === 0) {
-                    emptyMessage.classList.remove('hidden');
-                } else {
-                    emptyMessage.classList.add('hidden');
-                }
+                emptyMessage.classList.toggle('hidden', tasks.length > 0);
                 
                 tasks.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
@@ -195,11 +227,9 @@
 
                 timeRemainingEl.textContent = `Sisa waktu: ${days} hari, ${hours} jam, ${minutes} menit, ${seconds} detik`;
                 
-                if(diff < 24 * 60 * 60 * 1000) {
-                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-amber-600';
-                } else {
-                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-blue-600';
-                }
+                timeRemainingEl.className = diff < 24 * 60 * 60 * 1000 
+                    ? 'time-remaining text-sm font-medium mt-1 text-amber-600'
+                    : 'time-remaining text-sm font-medium mt-1 text-blue-600';
             };
             
             const updateAllRemainingTimes = () => {
@@ -216,7 +246,10 @@
                     const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
 
                     if (deadline < new Date()) {
-                        alert("Waktu deadline tidak boleh di masa lalu.");
+                        // Mengganti alert() dengan UI yang lebih baik
+                        taskNameInput.focus();
+                        taskNameInput.insertAdjacentHTML('afterend', '<p id="alert-msg" class="text-red-500 text-sm mt-1">Waktu deadline tidak boleh di masa lalu.</p>');
+                        setTimeout(() => document.getElementById('alert-msg')?.remove(), 3000);
                         return;
                     }
 
@@ -225,7 +258,7 @@
                         name: taskName,
                         deadline: deadline.toISOString(),
                         completed: false,
-                        notified24h: false // Properti baru untuk melacak notifikasi
+                        notified24h: false
                     });
 
                     saveTasks();
@@ -246,17 +279,16 @@
                 
                 if (e.target.classList.contains('toggle-complete-btn')) {
                     const task = tasks.find(task => task.id == taskId);
-                    if (task) {
-                        task.completed = !task.completed;
-                    }
+                    if (task) task.completed = !task.completed;
                 }
                 
                 saveTasks();
                 renderTasks();
             });
 
-            // Fungsi untuk memeriksa dan mengirim notifikasi
             const checkAndNotify = () => {
+                if (Notification.permission !== 'granted') return;
+
                 const now = new Date();
                 tasks.forEach(task => {
                     if (task.completed || task.notified24h) return;
@@ -265,22 +297,18 @@
                     const diff = deadline - now;
                     
                     if (diff < 24 * 60 * 60 * 1000 && diff > 0) {
-                        if ('Notification' in window && Notification.permission === 'granted') {
-                            new Notification('Tugas Segera Deadline!', {
-                                body: `Tugas "${task.name}" akan berakhir dalam kurang dari 24 jam.`,
-                                icon: 'https://placehold.co/48x48/f59e0b/ffffff?text=!'
-                            });
-                        }
-                        task.notified24h = true; // Tandai bahwa notifikasi sudah dikirim
+                        new Notification('Tugas Segera Deadline!', {
+                            body: `Tugas "${task.name}" akan berakhir dalam kurang dari 24 jam.`,
+                            icon: 'https://placehold.co/48x48/f59e0b/ffffff?text=!'
+                        });
+                        task.notified24h = true;
                         saveTasks();
                     }
                 });
             };
 
-            // Jalankan update setiap detik
             setInterval(() => {
                 updateAllRemainingTimes();
-                 // Perbarui style visual secara real-time
                 document.querySelectorAll('.task-item').forEach(item => {
                     const task = tasks.find(t => t.id == item.dataset.id);
                     if (!task) return;
@@ -291,7 +319,6 @@
                 });
             }, 1000);
 
-            // Periksa notifikasi setiap beberapa detik untuk efisiensi
             setInterval(checkAndNotify, 5000);
 
             renderTasks();
