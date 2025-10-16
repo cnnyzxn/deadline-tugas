@@ -43,16 +43,31 @@
     <div class="container mx-auto p-4 md:p-8 max-w-3xl">
 
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Penjadwal Tugas</h1>
-            <p class="text-gray-600 mt-2">Catat semua tugasmu dan jangan sampai ada yang terlewat!</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Tugas Kuliah</h1>
         </header>
 
         <!-- Form untuk menambah tugas baru -->
         <div class="bg-white p-6 rounded-xl shadow-md mb-8">
             <form id="task-form" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                 <div class="col-span-1 md:col-span-2">
-                    <label for="task-name" class="block text-sm font-medium text-gray-700 mb-1">Nama Tugas</label>
-                    <input type="text" id="task-name" placeholder="Contoh: Mengerjakan proyek akhir" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <label for="subject-select" class="block text-sm font-medium text-gray-700 mb-1">Pilih Mata Kuliah</label>
+                    <select id="subject-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <option value="">-- Pilih dari daftar --</option>
+                        <option value="Tugas METODOLOGI PENELITIAN">METODOLOGI PENELITIAN</option>
+                        <option value="Tugas KEAMANAN BASIS DATA">KEAMANAN BASIS DATA</option>
+                        <option value="Tugas FUNDAMENTAL DATA ANALYST">FUNDAMENTAL DATA ANALYST</option>
+                        <option value="Tugas STATISTIKA DAN PROBABILITAS">STATISTIKA DAN PROBABILITAS</option>
+                        <option value="Tugas CHARACTER BUILDING">CHARACTER BUILDING</option>
+                        <option value="Tugas SISTEM INFORMASI MANAJEMEN">SISTEM INFORMASI MANAJEMEN</option>
+                        <option value="Tugas BAHASA INDONESIA">BAHASA INDONESIA</option>
+                        <option value="Tugas WEB PROGRAMMING II">WEB PROGRAMMING II</option>
+                    </select>
+                </div>
+                <div class="col-span-1 md:col-span-2">
+                     <label for="pertemuan-select" class="block text-sm font-medium text-gray-700 mb-1">Pilih Pertemuan</label>
+                     <select id="pertemuan-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <!-- Opsi pertemuan akan di-generate oleh JavaScript -->
+                     </select>
                 </div>
                 <div>
                     <label for="deadline-date" class="block text-sm font-medium text-gray-700 mb-1">Tanggal Deadline</label>
@@ -84,7 +99,8 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const taskForm = document.getElementById('task-form');
-            const taskNameInput = document.getElementById('task-name');
+            const subjectSelect = document.getElementById('subject-select');
+            const pertemuanSelect = document.getElementById('pertemuan-select');
             const deadlineDateInput = document.getElementById('deadline-date');
             const deadlineTimeInput = document.getElementById('deadline-time');
             const taskList = document.getElementById('task-list');
@@ -93,6 +109,15 @@
             // Atur tanggal minimum ke hari ini
             const today = new Date().toISOString().split('T')[0];
             deadlineDateInput.setAttribute('min', today);
+
+            // *** BARU ***: Generate opsi untuk pilihan pertemuan
+            for (let i = 1; i <= 20; i++) {
+                const option = document.createElement('option');
+                option.value = `Pertemuan ${i}`;
+                option.textContent = `Pertemuan ${i}`;
+                pertemuanSelect.appendChild(option);
+            }
+            pertemuanSelect.value = "Pertemuan 1"; // Set default
 
             // Minta izin untuk notifikasi saat halaman dimuat
             if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -208,15 +233,21 @@
 
             taskForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                const taskName = taskNameInput.value.trim();
+                const subjectValue = subjectSelect.value;
+                const pertemuanValue = pertemuanSelect.value;
                 const deadlineDate = deadlineDateInput.value;
                 const deadlineTime = deadlineTimeInput.value;
 
-                if (taskName && deadlineDate && deadlineTime) {
+                if (subjectValue && pertemuanValue && deadlineDate && deadlineTime) {
+                    const taskName = `${subjectValue} - ${pertemuanValue}`;
                     const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
 
                     if (deadline < new Date()) {
-                        alert("Waktu deadline tidak boleh di masa lalu.");
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'fixed top-5 right-5 bg-red-500 text-white py-2 px-4 rounded-lg shadow-lg animate-pulse';
+                        errorDiv.textContent = 'Waktu deadline tidak boleh di masa lalu.';
+                        document.body.appendChild(errorDiv);
+                        setTimeout(() => errorDiv.remove(), 3000);
                         return;
                     }
 
@@ -225,12 +256,13 @@
                         name: taskName,
                         deadline: deadline.toISOString(),
                         completed: false,
-                        notified24h: false // Properti baru untuk melacak notifikasi
+                        notified24h: false
                     });
 
                     saveTasks();
                     renderTasks();
                     taskForm.reset();
+                    pertemuanSelect.value = "Pertemuan 1"; // Reset ke default
                     deadlineDateInput.setAttribute('min', today);
                 }
             });
