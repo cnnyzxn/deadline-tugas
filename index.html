@@ -3,39 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff"/>
+    <link rel="manifest" href="manifest.json">
+    
     <title>Penjadwal Tugas & Pengingat Deadline</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        /* Animasi untuk notifikasi dan task item */
-        .task-item-enter {
-            opacity: 0;
-            transform: translateY(-20px);
-            transition: opacity 0.3s ease-out, transform 0.3s ease-out;
-        }
-        .task-item-enter-active {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        /* Style untuk task yang sudah selesai */
-        .completed {
-            text-decoration: line-through;
-            color: #9ca3af; /* gray-400 */
-        }
-        /* Style untuk notifikasi 24 jam */
-        .deadline-warning {
-            border-left-width: 4px;
-            border-left-color: #f59e0b; /* amber-500 */
-            background-color: #fef3c7; /* amber-100 */
-        }
-        .deadline-urgent {
-             border-left-width: 4px;
-            border-left-color: #ef4444; /* red-500 */
-            background-color: #fee2e2; /* red-100 */
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .completed { text-decoration: line-through; color: #9ca3af; }
+        .deadline-warning { border-left: 4px solid #f59e0b; background-color: #fef3c7; }
+        .deadline-urgent { border-left: 4px solid #ef4444; background-color: #fee2e2; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -43,7 +21,8 @@
     <div class="container mx-auto p-4 md:p-8 max-w-3xl">
 
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Tugas Kuliah</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Penjadwal Tugas Kuliah</h1>
+            <p class="text-gray-600 mt-2">Pilih mata kuliah dan pertemuan, lalu atur deadline-nya!</p>
         </header>
 
         <!-- Form untuk menambah tugas baru -->
@@ -66,7 +45,6 @@
                 <div class="col-span-1 md:col-span-2">
                      <label for="pertemuan-select" class="block text-sm font-medium text-gray-700 mb-1">Pilih Pertemuan</label>
                      <select id="pertemuan-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                        <!-- Opsi pertemuan akan di-generate oleh JavaScript -->
                      </select>
                 </div>
                 <div>
@@ -88,15 +66,21 @@
         <!-- Daftar Tugas -->
         <div id="task-list-container">
             <h2 class="text-2xl font-bold mb-4">Daftar Tugas Aktif</h2>
-            <div id="task-list" class="space-y-4">
-                <!-- Tugas akan ditampilkan di sini oleh JavaScript -->
-            </div>
+            <div id="task-list" class="space-y-4"></div>
              <p id="empty-message" class="text-center text-gray-500 mt-8 hidden">Yeay! Tidak ada tugas aktif saat ini.</p>
         </div>
 
     </div>
 
     <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('Service Worker berhasil didaftarkan:', registration))
+                    .catch(error => console.log('Pendaftaran Service Worker gagal:', error));
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const taskForm = document.getElementById('task-form');
             const subjectSelect = document.getElementById('subject-select');
@@ -106,41 +90,36 @@
             const taskList = document.getElementById('task-list');
             const emptyMessage = document.getElementById('empty-message');
             
-            // Atur tanggal minimum ke hari ini
             const today = new Date().toISOString().split('T')[0];
             deadlineDateInput.setAttribute('min', today);
 
-            // *** BARU ***: Generate opsi untuk pilihan pertemuan
             for (let i = 1; i <= 20; i++) {
                 const option = document.createElement('option');
                 option.value = `Pertemuan ${i}`;
                 option.textContent = `Pertemuan ${i}`;
                 pertemuanSelect.appendChild(option);
             }
-            pertemuanSelect.value = "Pertemuan 1"; // Set default
+            pertemuanSelect.value = "Pertemuan 1";
 
-            // Minta izin untuk notifikasi saat halaman dimuat
-            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        new Notification('Terima kasih!', { body: 'Anda akan menerima pengingat deadline.' });
-                    }
-                });
+            function requestNotificationPermission() {
+                if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') {
+                            new Notification('Notifikasi Diaktifkan!', { body: 'Anda akan menerima pengingat deadline.', icon: '/icon-192.png' });
+                        }
+                    });
+                }
             }
+            taskForm.addEventListener('submit', requestNotificationPermission, { once: true });
+
 
             let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 
-            const saveTasks = () => {
-                localStorage.setItem('tasks', JSON.stringify(tasks));
-            };
+            const saveTasks = () => localStorage.setItem('tasks', JSON.stringify(tasks));
 
             const renderTasks = () => {
                 taskList.innerHTML = '';
-                if (tasks.length === 0) {
-                    emptyMessage.classList.remove('hidden');
-                } else {
-                    emptyMessage.classList.add('hidden');
-                }
+                emptyMessage.classList.toggle('hidden', tasks.length > 0);
                 
                 tasks.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
@@ -148,9 +127,8 @@
                     const taskItem = document.createElement('div');
                     taskItem.dataset.id = task.id;
                     
-                    const now = new Date();
                     const deadline = new Date(task.deadline);
-                    const diff = deadline - now;
+                    const diff = deadline - new Date();
                     const is24HourWarning = diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed;
                     const isUrgent = diff <= 0 && !task.completed;
 
@@ -171,35 +149,23 @@
                             <p class="time-remaining text-sm font-medium mt-1"></p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <button class="toggle-complete-btn px-3 py-1 text-sm rounded-full ${task.completed ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-700'} hover:opacity-80 transition-opacity">
+                            <button class="toggle-complete-btn px-3 py-1 text-sm rounded-full ${task.completed ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-700'}">
                                 ${task.completed ? 'Batal' : 'Selesai'}
                             </button>
-                            <button class="delete-btn px-3 py-1 text-sm bg-red-100 text-red-700 rounded-full hover:opacity-80 transition-opacity">Hapus</button>
+                            <button class="delete-btn px-3 py-1 text-sm bg-red-100 text-red-700 rounded-full">Hapus</button>
                         </div>
                     `;
-                    
                     taskList.appendChild(taskItem);
-                    setTimeout(() => {
-                         taskItem.classList.add('task-item-enter');
-                         requestAnimationFrame(() => {
-                             taskItem.classList.add('task-item-enter-active');
-                         });
-                    }, 10);
                 });
                 updateAllRemainingTimes();
             };
             
             const updateRemainingTime = (taskItem) => {
-                const taskId = taskItem.dataset.id;
-                const task = tasks.find(t => t.id == taskId);
+                const task = tasks.find(t => t.id == taskItem.dataset.id);
                 if (!task) return;
 
                 const timeRemainingEl = taskItem.querySelector('.time-remaining');
-                if (!timeRemainingEl) return;
-
-                const now = new Date();
-                const deadline = new Date(task.deadline);
-                const diff = deadline - now;
+                const diff = new Date(task.deadline) - new Date();
 
                 if (task.completed) {
                     timeRemainingEl.textContent = 'Tugas sudah selesai!';
@@ -214,119 +180,93 @@
                 }
                 
                 const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+                const minutes = Math.floor((diff / 1000 / 60) % 60);
+                const seconds = Math.floor((diff / 1000) % 60);
 
-                timeRemainingEl.textContent = `Sisa waktu: ${days} hari, ${hours} jam, ${minutes} menit, ${seconds} detik`;
-                
-                if(diff < 24 * 60 * 60 * 1000) {
-                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-amber-600';
-                } else {
-                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-blue-600';
-                }
+                timeRemainingEl.textContent = `Sisa waktu: ${days}h, ${hours}j, ${minutes}m, ${seconds}d`;
+                timeRemainingEl.className = `time-remaining text-sm font-medium mt-1 ${diff < 24 * 60 * 60 * 1000 ? 'text-amber-600' : 'text-blue-600'}`;
             };
             
-            const updateAllRemainingTimes = () => {
-                document.querySelectorAll('.task-item').forEach(item => updateRemainingTime(item));
-            };
+            const updateAllRemainingTimes = () => document.querySelectorAll('.task-item').forEach(updateRemainingTime);
 
             taskForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                const subjectValue = subjectSelect.value;
-                const pertemuanValue = pertemuanSelect.value;
-                const deadlineDate = deadlineDateInput.value;
-                const deadlineTime = deadlineTimeInput.value;
+                const taskName = `${subjectSelect.value} - ${pertemuanSelect.value}`;
+                const deadline = new Date(`${deadlineDateInput.value}T${deadlineTimeInput.value}`);
 
-                if (subjectValue && pertemuanValue && deadlineDate && deadlineTime) {
-                    const taskName = `${subjectValue} - ${pertemuanValue}`;
-                    const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
-
-                    if (deadline < new Date()) {
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'fixed top-5 right-5 bg-red-500 text-white py-2 px-4 rounded-lg shadow-lg animate-pulse';
-                        errorDiv.textContent = 'Waktu deadline tidak boleh di masa lalu.';
-                        document.body.appendChild(errorDiv);
-                        setTimeout(() => errorDiv.remove(), 3000);
-                        return;
-                    }
-
-                    tasks.push({
-                        id: Date.now(),
-                        name: taskName,
-                        deadline: deadline.toISOString(),
-                        completed: false,
-                        notified24h: false
-                    });
-
-                    saveTasks();
-                    renderTasks();
-                    taskForm.reset();
-                    pertemuanSelect.value = "Pertemuan 1"; // Reset ke default
-                    deadlineDateInput.setAttribute('min', today);
+                if (deadline < new Date()) {
+                    alert("Waktu deadline tidak boleh di masa lalu.");
+                    return;
                 }
+
+                tasks.push({ id: Date.now(), name: taskName, deadline: deadline.toISOString(), completed: false, notified24h: false });
+                saveTasks();
+                renderTasks();
+                taskForm.reset();
+                pertemuanSelect.value = "Pertemuan 1";
+                deadlineDateInput.setAttribute('min', today);
             });
 
             taskList.addEventListener('click', (e) => {
                 const taskItem = e.target.closest('.task-item');
                 if (!taskItem) return;
-                const taskId = taskItem.dataset.id;
+                const taskId = Number(taskItem.dataset.id);
                 
-                if (e.target.classList.contains('delete-btn')) {
-                    tasks = tasks.filter(task => task.id != taskId);
+                if (e.target.matches('.delete-btn')) {
+                    tasks = tasks.filter(task => task.id !== taskId);
                 }
                 
-                if (e.target.classList.contains('toggle-complete-btn')) {
-                    const task = tasks.find(task => task.id == taskId);
-                    if (task) {
-                        task.completed = !task.completed;
-                    }
+                if (e.target.matches('.toggle-complete-btn')) {
+                    const task = tasks.find(task => task.id === taskId);
+                    if (task) task.completed = !task.completed;
                 }
                 
                 saveTasks();
                 renderTasks();
             });
 
-            // Fungsi untuk memeriksa dan mengirim notifikasi
             const checkAndNotify = () => {
-                const now = new Date();
+                let taskUpdated = false;
                 tasks.forEach(task => {
                     if (task.completed || task.notified24h) return;
 
-                    const deadline = new Date(task.deadline);
-                    const diff = deadline - now;
+                    const diff = new Date(task.deadline) - new Date();
                     
                     if (diff < 24 * 60 * 60 * 1000 && diff > 0) {
-                        if ('Notification' in window && Notification.permission === 'granted') {
-                            new Notification('Tugas Segera Deadline!', {
-                                body: `Tugas "${task.name}" akan berakhir dalam kurang dari 24 jam.`,
-                                icon: 'https://placehold.co/48x48/f59e0b/ffffff?text=!'
+                        if (Notification.permission === 'granted') {
+                            navigator.serviceWorker.ready.then(registration => {
+                                registration.showNotification('Tugas Segera Deadline!', {
+                                    body: `Tugas "${task.name}" akan berakhir dalam kurang dari 24 jam.`,
+                                    icon: 'icon-192.png',
+                                    badge: 'icon-72.png',
+                                    // *** BARU ***: Tag untuk mencegah notif duplikat
+                                    tag: `task-${task.id}` 
+                                });
                             });
                         }
-                        task.notified24h = true; // Tandai bahwa notifikasi sudah dikirim
-                        saveTasks();
+                        task.notified24h = true;
+                        taskUpdated = true;
                     }
                 });
+                if (taskUpdated) saveTasks();
             };
+            
+            // *** BARU ***: Listener untuk 'visibilitychange'
+            // Ini akan jalan setiap kali kamu buka lagi tab browsernya
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    console.log('Tab is visible again, checking tasks...');
+                    renderTasks(); // Update tampilan
+                    checkAndNotify(); // Langsung cek notifikasi
+                }
+            });
 
-            // Jalankan update setiap detik
-            setInterval(() => {
-                updateAllRemainingTimes();
-                 // Perbarui style visual secara real-time
-                document.querySelectorAll('.task-item').forEach(item => {
-                    const task = tasks.find(t => t.id == item.dataset.id);
-                    if (!task) return;
-                    
-                    const diff = new Date(task.deadline) - new Date();
-                    item.classList.toggle('deadline-warning', diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed);
-                    item.classList.toggle('deadline-urgent', diff <= 0 && !task.completed);
-                });
-            }, 1000);
 
-            // Periksa notifikasi setiap beberapa detik untuk efisiensi
-            setInterval(checkAndNotify, 5000);
-
+            setInterval(updateAllRemainingTimes, 1000);
+            setInterval(checkAndNotify, 30000); 
             renderTasks();
+            checkAndNotify(); // Cek juga saat pertama kali halaman dimuat
         });
     </script>
 </body>
