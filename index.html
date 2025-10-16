@@ -38,6 +38,15 @@
             text-decoration: underline;
             font-weight: 600;
         }
+        .test-btn {
+            background-color: #e0e7ff;
+            color: #3730a3;
+            padding: 4px 8px;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            margin-left: 8px;
+            border: 1px solid #c7d2fe;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -47,7 +56,6 @@
         <header class="text-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Penjadwal Tugas</h1>
             <p class="text-gray-600 mt-2">Catat semua tugasmu dan jangan sampai ada yang terlewat!</p>
-            <!-- Area Status Notifikasi Baru -->
             <div id="notification-status" class="mt-4 p-3 rounded-lg text-center text-sm font-medium transition-all duration-300">
                 <!-- Status akan diisi oleh JavaScript -->
             </div>
@@ -79,12 +87,9 @@
         <!-- Daftar Tugas -->
         <div id="task-list-container">
             <h2 class="text-2xl font-bold mb-4">Daftar Tugas Aktif</h2>
-            <div id="task-list" class="space-y-4">
-                <!-- Tugas akan ditampilkan di sini oleh JavaScript -->
-            </div>
-             <p id="empty-message" class="text-center text-gray-500 mt-8 hidden">Yeay! Tidak ada tugas aktif saat ini.</p>
+            <div id="task-list" class="space-y-4"></div>
+            <p id="empty-message" class="text-center text-gray-500 mt-8 hidden">Yeay! Tidak ada tugas aktif saat ini.</p>
         </div>
-
     </div>
 
     <script>
@@ -100,23 +105,33 @@
             const today = new Date().toISOString().split('T')[0];
             deadlineDateInput.setAttribute('min', today);
 
+            const showTestNotification = () => {
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('Tes Berhasil!', {
+                        body: 'Jika notifikasi ini muncul, berarti izin sudah benar.',
+                        icon: 'https://placehold.co/48x48/22c55e/ffffff?text=OK'
+                    });
+                } else {
+                    console.error('Tidak bisa menampilkan tes notifikasi. Izin: ', Notification.permission);
+                }
+            };
+
             const updateNotificationStatus = () => {
                 if (!window.isSecureContext) {
                     notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-red-100 text-red-800';
                     notificationStatus.innerHTML = '<strong>Koneksi Tidak Aman:</strong> Notifikasi hanya berfungsi pada koneksi HTTPS.';
                     return;
                 }
-
                 if (!('Notification' in window)) {
                     notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-yellow-100 text-yellow-800';
                     notificationStatus.innerHTML = 'Browser ini tidak mendukung notifikasi desktop.';
                     return;
                 }
-
                 switch (Notification.permission) {
                     case 'granted':
                         notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-green-100 text-green-800';
-                        notificationStatus.innerHTML = '✔️ Notifikasi sudah aktif.';
+                        notificationStatus.innerHTML = '✔️ Notifikasi sudah aktif. <button class="test-btn" id="test-notification-btn">Tes Notifikasi</button>';
+                        document.getElementById('test-notification-btn').onclick = showTestNotification;
                         break;
                     case 'denied':
                         notificationStatus.className = 'mt-4 p-3 rounded-lg text-center text-sm font-medium bg-red-100 text-red-800';
@@ -140,37 +155,21 @@
             updateNotificationStatus();
 
             let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
-
-            const saveTasks = () => {
-                localStorage.setItem('tasks', JSON.stringify(tasks));
-            };
+            const saveTasks = () => localStorage.setItem('tasks', JSON.stringify(tasks));
 
             const renderTasks = () => {
                 taskList.innerHTML = '';
                 emptyMessage.classList.toggle('hidden', tasks.length > 0);
-                
                 tasks.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
-
                 tasks.forEach(task => {
                     const taskItem = document.createElement('div');
                     taskItem.dataset.id = task.id;
-                    
-                    const now = new Date();
                     const deadline = new Date(task.deadline);
-                    const diff = deadline - now;
+                    const diff = deadline - new Date();
                     const is24HourWarning = diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed;
                     const isUrgent = diff <= 0 && !task.completed;
-
-                    let taskClasses = 'task-item bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300';
-                    if (is24HourWarning) taskClasses += ' deadline-warning';
-                    if (isUrgent) taskClasses += ' deadline-urgent';
-                    
-                    taskItem.className = taskClasses;
-
-                    const deadlineFormatted = deadline.toLocaleString('id-ID', {
-                        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                    });
-
+                    taskItem.className = `task-item bg-white p-4 rounded-xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300 ${is24HourWarning ? 'deadline-warning' : ''} ${isUrgent ? 'deadline-urgent' : ''}`;
+                    const deadlineFormatted = deadline.toLocaleString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                     taskItem.innerHTML = `
                         <div class="flex-grow">
                             <p class="task-name font-semibold text-lg ${task.completed ? 'completed' : ''}">${task.name}</p>
@@ -178,89 +177,46 @@
                             <p class="time-remaining text-sm font-medium mt-1"></p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <button class="toggle-complete-btn px-3 py-1 text-sm rounded-full ${task.completed ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-700'} hover:opacity-80 transition-opacity">
-                                ${task.completed ? 'Batal' : 'Selesai'}
-                            </button>
+                            <button class="toggle-complete-btn px-3 py-1 text-sm rounded-full ${task.completed ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-700'} hover:opacity-80 transition-opacity">${task.completed ? 'Batal' : 'Selesai'}</button>
                             <button class="delete-btn px-3 py-1 text-sm bg-red-100 text-red-700 rounded-full hover:opacity-80 transition-opacity">Hapus</button>
-                        </div>
-                    `;
-                    
+                        </div>`;
                     taskList.appendChild(taskItem);
-                    setTimeout(() => {
-                         taskItem.classList.add('task-item-enter');
-                         requestAnimationFrame(() => {
-                             taskItem.classList.add('task-item-enter-active');
-                         });
-                    }, 10);
                 });
                 updateAllRemainingTimes();
             };
-            
+
             const updateRemainingTime = (taskItem) => {
                 const taskId = taskItem.dataset.id;
                 const task = tasks.find(t => t.id == taskId);
                 if (!task) return;
-
                 const timeRemainingEl = taskItem.querySelector('.time-remaining');
-                if (!timeRemainingEl) return;
-
-                const now = new Date();
-                const deadline = new Date(task.deadline);
-                const diff = deadline - now;
-
+                const diff = new Date(task.deadline) - new Date();
                 if (task.completed) {
                     timeRemainingEl.textContent = 'Tugas sudah selesai!';
                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-green-600';
                     return;
                 }
-
                 if (diff <= 0) {
                     timeRemainingEl.textContent = 'Waktu habis!';
                     timeRemainingEl.className = 'time-remaining text-sm font-medium mt-1 text-red-600';
                     return;
                 }
-                
-                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
+                const days = Math.floor(diff / 86400000);
+                const hours = Math.floor((diff % 86400000) / 3600000);
+                const minutes = Math.floor((diff % 3600000) / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
                 timeRemainingEl.textContent = `Sisa waktu: ${days} hari, ${hours} jam, ${minutes} menit, ${seconds} detik`;
-                
-                timeRemainingEl.className = diff < 24 * 60 * 60 * 1000 
-                    ? 'time-remaining text-sm font-medium mt-1 text-amber-600'
-                    : 'time-remaining text-sm font-medium mt-1 text-blue-600';
+                timeRemainingEl.className = diff < 86400000 ? 'time-remaining text-sm font-medium mt-1 text-amber-600' : 'time-remaining text-sm font-medium mt-1 text-blue-600';
             };
-            
-            const updateAllRemainingTimes = () => {
-                document.querySelectorAll('.task-item').forEach(item => updateRemainingTime(item));
-            };
+
+            const updateAllRemainingTimes = () => document.querySelectorAll('.task-item').forEach(updateRemainingTime);
 
             taskForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const taskName = taskNameInput.value.trim();
-                const deadlineDate = deadlineDateInput.value;
-                const deadlineTime = deadlineTimeInput.value;
-
-                if (taskName && deadlineDate && deadlineTime) {
-                    const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
-
-                    if (deadline < new Date()) {
-                        // Mengganti alert() dengan UI yang lebih baik
-                        taskNameInput.focus();
-                        taskNameInput.insertAdjacentHTML('afterend', '<p id="alert-msg" class="text-red-500 text-sm mt-1">Waktu deadline tidak boleh di masa lalu.</p>');
-                        setTimeout(() => document.getElementById('alert-msg')?.remove(), 3000);
-                        return;
-                    }
-
-                    tasks.push({
-                        id: Date.now(),
-                        name: taskName,
-                        deadline: deadline.toISOString(),
-                        completed: false,
-                        notified24h: false
-                    });
-
+                if (taskName && deadlineDateInput.value && deadlineTimeInput.value) {
+                    const deadline = new Date(`${deadlineDateInput.value}T${deadlineTimeInput.value}`);
+                    tasks.push({ id: Date.now(), name: taskName, deadline: deadline.toISOString(), completed: false, notified24h: false });
                     saveTasks();
                     renderTasks();
                     taskForm.reset();
@@ -271,56 +227,42 @@
             taskList.addEventListener('click', (e) => {
                 const taskItem = e.target.closest('.task-item');
                 if (!taskItem) return;
-                const taskId = taskItem.dataset.id;
-                
+                const taskId = Number(taskItem.dataset.id);
                 if (e.target.classList.contains('delete-btn')) {
-                    tasks = tasks.filter(task => task.id != taskId);
+                    tasks = tasks.filter(task => task.id !== taskId);
                 }
-                
                 if (e.target.classList.contains('toggle-complete-btn')) {
-                    const task = tasks.find(task => task.id == taskId);
+                    const task = tasks.find(task => task.id === taskId);
                     if (task) task.completed = !task.completed;
                 }
-                
                 saveTasks();
                 renderTasks();
             });
 
             const checkAndNotify = () => {
+                // Tambahkan log ini untuk melihat apakah fungsi berjalan
+                console.log(`[${new Date().toLocaleTimeString()}] Mengecek notifikasi... Status Izin: ${Notification.permission}`);
                 if (Notification.permission !== 'granted') return;
 
-                const now = new Date();
                 tasks.forEach(task => {
                     if (task.completed || task.notified24h) return;
-
-                    const deadline = new Date(task.deadline);
-                    const diff = deadline - now;
-                    
-                    if (diff < 24 * 60 * 60 * 1000 && diff > 0) {
+                    const diff = new Date(task.deadline) - new Date();
+                    if (diff < 86400000 && diff > 0) {
+                        // Tambahkan log sebelum mengirim notifikasi
+                        console.log(`Mencoba mengirim notifikasi untuk tugas: "${task.name}"`);
                         new Notification('Tugas Segera Deadline!', {
                             body: `Tugas "${task.name}" akan berakhir dalam kurang dari 24 jam.`,
                             icon: 'https://placehold.co/48x48/f59e0b/ffffff?text=!'
                         });
                         task.notified24h = true;
-                        saveTasks();
                     }
                 });
+                saveTasks(); // Simpan status 'notified24h'
             };
 
-            setInterval(() => {
-                updateAllRemainingTimes();
-                document.querySelectorAll('.task-item').forEach(item => {
-                    const task = tasks.find(t => t.id == item.dataset.id);
-                    if (!task) return;
-                    
-                    const diff = new Date(task.deadline) - new Date();
-                    item.classList.toggle('deadline-warning', diff < 24 * 60 * 60 * 1000 && diff > 0 && !task.completed);
-                    item.classList.toggle('deadline-urgent', diff <= 0 && !task.completed);
-                });
-            }, 1000);
-
-            setInterval(checkAndNotify, 5000);
-
+            setInterval(updateAllRemainingTimes, 1000);
+            // Kita buat interval pengecekan notifikasi lebih jarang untuk menghemat baterai
+            setInterval(checkAndNotify, 30000); // Cek setiap 30 detik
             renderTasks();
         });
     </script>
